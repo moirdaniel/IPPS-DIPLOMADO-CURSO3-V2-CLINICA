@@ -1,6 +1,6 @@
 # Evaluación 2 · API de clínica
 
-Proyecto del Módulo 3 con Node.js, Express y MongoDB. Están completadas las **Partes 0, 1 y 2**: arranque, modelo Paciente, registro, login y consultas de médicos. Falta la Parte 3: API de pacientes y regla del médico tratante.
+Proyecto del Módulo 3 con Node.js, Express y MongoDB. Están completadas las **Partes 0, 1, 2 y 3**: arranque, modelos, autenticación, consultas de médicos y CRUD de pacientes con la regla del médico tratante.
 
 ## Iniciar
 
@@ -36,7 +36,7 @@ Si Yarn no está disponible, usa `npx.cmd --yes yarn@1.22.22 install` y `npx.cmd
 
 Comprobamos la conexión real a MongoDB, las respuestas HTTP indicadas abajo y el reinicio automático al guardar `server.js`. La revisión de dependencias con `yarn audit` no encontró vulnerabilidades.
 
-Las rutas de pacientes conservan las respuestas de práctica del repositorio original. No son todavía el CRUD de la Parte 3. `GET /pacientes` sin token debe responder 401: sirve para comprobar que el servidor responde y la protección sigue activa.
+Las respuestas de práctica de pacientes se reemplazaron por el CRUD en la Parte 3. `GET /pacientes` sin token responde 401.
 
 ## Parte 1: modelo Paciente
 
@@ -56,7 +56,7 @@ El modelo está en `models/paciente.model.js` y guarda los documentos en la cole
 
 Comprobamos las validaciones y la relación en MongoDB con datos ficticios temporales, que se eliminaron al terminar. El RUT único se aplica mediante un índice de MongoDB; un duplicado produce el código 11000, que el servidor traduce a HTTP 409.
 
-Las rutas que asignan el médico desde el token y aplican la regla del tratante se implementarán en la Parte 3. Definir `ref` en el modelo no comprueba por sí solo que el médico exista.
+Las rutas de la Parte 3 asignan el médico desde el token. Al crear un paciente también comprobamos que el médico exista: definir `ref` en el modelo no hace esa comprobación por sí solo.
 
 ## Parte 2: registro, login y consultas de médicos
 
@@ -111,6 +111,64 @@ Sin token o con un token inválido o vencido, responde **401**. Un id mal escrit
 El controlador recibe la solicitud y decide el estado HTTP; el servicio consulta los modelos. El modelo Medico conserva sus campos originales, transforma la contraseña antes de guardar y la quita de todas las respuestas mediante `toJSON`.
 
 Verificamos 31 consultas HTTP con MongoDB local, incluidos duplicados, filtros, ids inválidos, listas vacías y tokens incorrectos o vencidos. También comprobamos que la contraseña se guarda como hash y no se vuelve a transformar al editar otro campo. Los datos ficticios de esas pruebas se eliminaron al terminar.
+
+## Parte 3: CRUD de pacientes y médico tratante
+
+Todas las rutas de pacientes necesitan **Authorization → Bearer Token**. Usa el token obtenido al registrar al médico o iniciar sesión.
+
+### 1. Crear
+
+**POST** `http://localhost:4100/pacientes`, Body → raw → JSON:
+
+```json
+{
+  "nombre": "Paciente de ejemplo",
+  "rut": "PACIENTE-PRUEBA-01",
+  "fechaNacimiento": "2000-01-15",
+  "prevision": "Fonasa",
+  "telefono": "900000000",
+  "email": "paciente@example.com"
+}
+```
+
+Usa datos ficticios para practicar. El ejemplo de RUT es una etiqueta de prueba: el modelo exige texto obligatorio y único, no valida su dígito verificador.
+
+Responde **201**. Copia su `_id` como `ID_PACIENTE`. El médico se toma del token: si envías `medico` en el body, se ignora. Sin previsión se guarda Fonasa. Un RUT repetido responde **409**, aunque el otro paciente pertenezca a otro médico. Campos requeridos ausentes o datos inválidos responden **400**.
+
+### 2. Consultar
+
+| Método | URL | Resultado |
+| --- | --- | --- |
+| GET | `http://localhost:4100/pacientes` | Solo los pacientes del médico conectado |
+| GET | `http://localhost:4100/pacientes?prevision=Isapre` | Mis pacientes de Isapre |
+| GET | `http://localhost:4100/pacientes/ID_PACIENTE` | Un paciente por su id, aunque su tratante sea otro médico |
+
+Responden **200**. Una lista sin resultados devuelve **[]**. Un id mal escrito devuelve **400** y un paciente inexistente devuelve **404**.
+
+### 3. Editar
+
+**PUT** `http://localhost:4100/pacientes/ID_PACIENTE`, con el token del médico tratante:
+
+```json
+{
+  "nombre": "Paciente actualizado",
+  "prevision": "Isapre"
+}
+```
+
+Responde **200** con el paciente actualizado. Puedes enviar solo los campos que quieres cambiar. Se vuelven a validar los datos con el modelo. No puedes cambiar el médico ni el `_id` mediante el body.
+
+### 4. Probar la regla con otro médico
+
+Registra un segundo médico con otro email y copia su token. Con ese token puedes consultar al paciente por id, pero **PUT** y **DELETE** sobre el paciente del primer médico devuelven **403**. El paciente queda intacto.
+
+La comprobación está en `services/paciente.service.js`, en `comprobarTratante`: compara `paciente.medico.toString()` con el id del token. La misma regla se usa al editar y al eliminar. **401** significa token ausente o inválido; **403** significa que tienes token pero no eres el tratante.
+
+### 5. Eliminar
+
+**DELETE** `http://localhost:4100/pacientes/ID_PACIENTE`, con el token del tratante y sin Body. Elimina realmente el paciente de MongoDB. Responde **204 sin cuerpo**. Si luego lo consultas, responde **404**.
+
+Probamos 45 consultas HTTP con dos médicos y pacientes ficticios. Comprobamos el CRUD, los filtros, las listas separadas por médico, la lectura compartida, los 403, la asignación del médico desde el token y que un intento de modificarlo mediante el body no tenga efecto. Los datos de prueba se eliminaron al terminar.
 
 ## Video
 

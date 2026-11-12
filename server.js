@@ -23,6 +23,10 @@ app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 
 // Aquí llegan los errores de las rutas para responder siempre en JSON.
 app.use((error, req, res, next) => {
+  // Los servicios pueden avisar que falta autorización o que un dato es inválido.
+  if ([400, 401, 403, 404].includes(error.status)) {
+    return res.status(error.status).json({ error: error.message })
+  }
   if (error.name === 'ValidationError' || error.name === 'CastError' ||
       error.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'Revisa los datos enviados' })
