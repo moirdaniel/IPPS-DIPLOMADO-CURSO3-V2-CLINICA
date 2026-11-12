@@ -4,6 +4,9 @@ import mongoose from 'mongoose'
 import { conectar } from './config/db.js'
 import { authRoutes } from './routes/auth.routes.js'
 import { pacienteRoutes } from './routes/paciente.route.js'
+import { medicoRoutes } from './routes/medico.routes.js'
+import { Medico } from './models/medico.model.js'
+import { Paciente } from './models/paciente.model.js'
 
 // Creamos la aplicación y permitimos recibir datos en formato JSON.
 const app = express()
@@ -12,6 +15,7 @@ app.use(express.json())
 
 // Cada router reúne las rutas de una parte de la API.
 app.use('/auth', authRoutes)
+app.use('/medicos', medicoRoutes)
 app.use('/pacientes', pacienteRoutes)
 
 // Si la dirección no existe, respondemos con un error claro.
@@ -32,6 +36,8 @@ app.use((error, req, res, next) => {
 try {
   // Primero conectamos MongoDB y después encendemos el servidor.
   await conectar()
+  // Esperamos los índices únicos para detectar emails y RUT repetidos.
+  await Promise.all([Medico.init(), Paciente.init()])
   const PORT = Number(process.env.PORT || 4100)
   const servidor = app.listen(PORT)
   servidor.on('listening', () => {

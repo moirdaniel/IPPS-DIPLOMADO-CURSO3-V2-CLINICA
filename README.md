@@ -1,6 +1,6 @@
 # Evaluación 2 · API de clínica
 
-Proyecto del Módulo 3 con Node.js, Express y MongoDB. Están completadas la **Parte 0: arranque y configuración** y la **Parte 1: modelo Paciente**. Las APIs completas de médicos y pacientes se completarán en las partes siguientes.
+Proyecto del Módulo 3 con Node.js, Express y MongoDB. Están completadas las **Partes 0, 1 y 2**: arranque, modelo Paciente, registro, login y consultas de médicos. Falta la Parte 3: API de pacientes y regla del médico tratante.
 
 ## Iniciar
 
@@ -30,7 +30,7 @@ Si Yarn no está disponible, usa `npx.cmd --yes yarn@1.22.22 install` y `npx.cmd
 - Faltaba `.js` en el import del middleware y faltaba exportar `authRoutes`.
 - La conexión tenía una dirección vacía y `consolelog` estaba mal escrito: ahora lee `.env` y usa `console.log`.
 - Faltaba importar bcrypt en el modelo de médico. Los borradores de paciente y ficha no importaban Mongoose ni exportaban sus modelos; ficha tenía una línea suelta que no era código válido.
-- La respuesta del registro no se enviaba al cliente y el login quedaba sin responder. Ahora el registro responde y el login avisa con 501 que se completará en la Parte 2.
+- La respuesta del registro no se enviaba al cliente y el login quedaba sin responder. En la Parte 0 evitamos dejar las solicitudes esperando; en la Parte 2 completamos ambas rutas.
 - Quitamos el secreto JWT del código y corregimos `.gitignore` para excluir `.env` e incluir `yarn.lock`.
 - Windows rechazó el puerto 3001 con `EACCES`. Usamos el puerto libre 4100 y lo dejamos configurable con `PORT` en `.env`.
 
@@ -57,6 +57,60 @@ El modelo está en `models/paciente.model.js` y guarda los documentos en la cole
 Comprobamos las validaciones y la relación en MongoDB con datos ficticios temporales, que se eliminaron al terminar. El RUT único se aplica mediante un índice de MongoDB; un duplicado produce el código 11000, que el servidor traduce a HTTP 409.
 
 Las rutas que asignan el médico desde el token y aplican la regla del tratante se implementarán en la Parte 3. Definir `ref` en el modelo no comprueba por sí solo que el médico exista.
+
+## Parte 2: registro, login y consultas de médicos
+
+En Postman usa **Body → raw → JSON** para los POST. Las rutas de autenticación son públicas.
+
+### Registrar un médico
+
+**POST** `http://localhost:4100/auth/registro`:
+
+```json
+{
+  "nombre": "Ana de Ejemplo",
+  "especialidad": "Pediatría",
+  "email": "ana@example.com",
+  "password": "PracticaSegura123"
+}
+```
+
+Responde **201** con `{ medico, token }`. No incluye password. Un email repetido responde **409** y datos faltantes o inválidos responden **400**. La contraseña debe tener al menos 6 caracteres (como indica el modelo original) y máximo 72 bytes.
+
+### Iniciar sesión
+
+**POST** `http://localhost:4100/auth/login`:
+
+```json
+{
+  "email": "ana@example.com",
+  "password": "PracticaSegura123"
+}
+```
+
+Responde **200** con `{ medico, token }`. Si falta email o password responde **400**. Si el email no existe o la contraseña es incorrecta responde **401**. El token vence en dos horas.
+
+### Consultar médicos con token
+
+Copia el token y selecciona **Authorization → Bearer Token** en Postman. Pégalo sin comillas. Todas estas consultas usan GET y no llevan Body:
+
+| URL | Respuesta |
+| --- | --- |
+| `http://localhost:4100/medicos` | 200, todos los médicos |
+| `http://localhost:4100/medicos?especialidad=Pediatría` | 200, médicos de esa especialidad |
+| `http://localhost:4100/medicos/perfil` | 200, el médico del token |
+| `http://localhost:4100/medicos/ID_MEDICO` | 200, un médico por su `_id` |
+| `http://localhost:4100/medicos/ID_MEDICO/pacientes` | 200, pacientes de ese médico |
+
+Reemplaza `ID_MEDICO` por el `_id` recibido al registrar al médico. El filtro de especialidad usa el texto guardado, por ejemplo `Pediatría`.
+
+Sin token o con un token inválido o vencido, responde **401**. Un id mal escrito, como `123`, responde **400**. Un id válido que no existe responde **404**. Un médico existente sin pacientes devuelve **200 con []**. Un filtro de especialidad sin resultados también devuelve **200 con []**.
+
+`/perfil` se declara antes que `/:id` para que Express no interprete la palabra perfil como un identificador. Las rutas de médicos están protegidas juntas con `medicoRoutes.use(proteger)`.
+
+El controlador recibe la solicitud y decide el estado HTTP; el servicio consulta los modelos. El modelo Medico conserva sus campos originales, transforma la contraseña antes de guardar y la quita de todas las respuestas mediante `toJSON`.
+
+Verificamos 31 consultas HTTP con MongoDB local, incluidos duplicados, filtros, ids inválidos, listas vacías y tokens incorrectos o vencidos. También comprobamos que la contraseña se guarda como hash y no se vuelve a transformar al editar otro campo. Los datos ficticios de esas pruebas se eliminaron al terminar.
 
 ## Video
 
