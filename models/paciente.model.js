@@ -1,6 +1,11 @@
-const medicoSchema = new mongoose.Schema({
+import mongoose from 'mongoose'
+
+// Borrador de la clase: los campos correctos del paciente van en la Parte 1.
+const pacienteSchema = new mongoose.Schema({
   nombre: { type: String, required: true, trim: true },
   especialidad: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true, minlength: 6 },
 }, { timestamps: true })
+
+export const Paciente = mongoose.model('Paciente', pacienteSchema, 'pacientes')

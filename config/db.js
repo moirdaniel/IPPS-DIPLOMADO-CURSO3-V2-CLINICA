@@ -1,9 +1,9 @@
 import mongoose from 'mongoose'
 
 
-const MONGODB_URI = ''
-
+// La dirección se lee desde .env para no publicarla en el código.
 export const conectar = async () => {
-    await mongoose.connect( MONGODB_URI )
-    consolelog('conectado a la bd')
+    if (!process.env.MONGODB_URI) throw new Error('Falta MONGODB_URI en .env')
+    await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
+    console.log('Conectado a la bd')
 }
